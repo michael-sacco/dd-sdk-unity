@@ -35,32 +35,33 @@ def _update_android_version(version: str):
     tree.write(UNITY_DEPENDENCIES_FILE)
 
 
-def _update_ios_version(version: str):
-    repo = git.Repo("../../")
-
+def _update_ios_version(version: str, no_update: bool):
     # Update git subodule
-    ios_submodule = next((x for x in repo.submodules if x.name == "modules/dd-sdk-ios"), None)
-    if ios_submodule is None:
-        print("Could not find the iOS sdk submodule to update")
-        return
+    if not no_update:
+        repo = git.Repo("../../")
 
-    for origin in ios_submodule.module().remotes:
-        origin.fetch()
-
-    if version != "develop":
-        if version not in ios_submodule.module().tags:
-            print(f"Could not find tag `{version}` in iOS submodule.")
+        ios_submodule = next((x for x in repo.submodules if x.name == "modules/dd-sdk-ios"), None)
+        if ios_submodule is None:
+            print("Could not find the iOS sdk submodule to update")
             return
 
-        version_tag = ios_submodule.module().tags[version]
-        ios_submodule.module().head.reference = version_tag
-        print(f"Resetting dd-sdk-ios to tag {version}")
-        ios_submodule.module().head.reset(index=True, working_tree=True)
-    else:
-        develop = ios_submodule.module().branches["develop"]
-        ios_submodule.module().head.reference = develop
-        print(f"Resetting dd-sdk-ios to develop")
-        ios_submodule.module().head.reset(index=True, working_tree=True)
+        for origin in ios_submodule.module().remotes:
+            origin.fetch()
+
+        if version != "develop":
+            if version not in ios_submodule.module().tags:
+                print(f"Could not find tag `{version}` in iOS submodule.")
+                return
+
+            version_tag = ios_submodule.module().tags[version]
+            ios_submodule.module().head.reference = version_tag
+            print(f"Resetting dd-sdk-ios to tag {version}")
+            ios_submodule.module().head.reset(index=True, working_tree=True)
+        else:
+            develop = ios_submodule.module().branches["develop"]
+            ios_submodule.module().head.reference = develop
+            print(f"Resetting dd-sdk-ios to develop")
+            ios_submodule.module().head.reset(index=True, working_tree=True)
 
     # Build carthage
     print("Running carthage build...")
@@ -82,14 +83,22 @@ def _update_ios_version(version: str):
 def main():
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--platform", required=True, choices=["android", "ios"])
-    arg_parser.add_argument("--version", required=True)
+    arg_parser.add_argument("--version", required=False)
+    arg_parser.add_argument("--no-update", action='store_true')
 
     args = arg_parser.parse_args()
 
     if args.platform == "android":
+        if arg_parser.version is None:
+            print("Version is required for Android")
+            return
         _update_android_version(args.version)
     elif args.platform == "ios":
-        _update_ios_version(args.version)
+        no_update = args.no_update
+        if not no_update and args.version is None:
+            print("A version is required for iOS unless you specify --no-update")
+            return
+        _update_ios_version(args.version, no_update)
 
 if __name__ == "__main__":
     main()
